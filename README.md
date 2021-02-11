@@ -2,6 +2,15 @@
 
 [![Documentation Status](https://readthedocs.org/projects/dhsegment/badge/?version=latest)](https://dhsegment.readthedocs.io/en/latest/?badge=latest)
 
+**About This Fork of dhSegment:**
+This variant of dhSegment has been customized for Internet Archive. No attempt has been made to 
+make the changes general enough to be folded by back into dhSegment as pull requests 
+(except for minor fixes). The file prefix "ia_" is used to identify new files added. These might
+be helpful to others, at least for showing what is possible and how we did it.
+Files under dh_segment/ and train.py have *not* been changed. 
+
+-----
+
 **dhSegment** is a tool for Historical Document Processing. Its generic approach allows to segment regions and
 extract content from different type of documents. See 
 [some examples here](https://dhsegment.readthedocs.io/en/latest/intro/intro.html#use-cases).
