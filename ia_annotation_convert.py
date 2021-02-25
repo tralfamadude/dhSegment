@@ -73,6 +73,7 @@ dataset_foo_journal/   contains:
   segment_labels.json
   annotation_names.csv
 
+ToDo: need a way to auto-create ground.csv based on masks. 
 """
 
 def create_blank_mask(input_image_filename, output_image_filename):
