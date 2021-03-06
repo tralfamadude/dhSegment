@@ -56,7 +56,7 @@ masks_final_dir = images_dir + '/' + collection + '/labels'    # color mask imag
 images_final_dir = images_dir + '/' + collection + '/images'   # images will be moved here after processing
 masks_dir = masks_final_dir + '_tmp'   # temp area for b&w masks
 masks_proto_dir = masks_dir + "/" + collection
-master_type_file = 'labeling/annotation_names.csv'  # ToDo: arg to specify thigs
+master_type_file = 'labeling/annotation_names.csv'  # ToDo: arg to specify this
 generated_classes_file = images_dir + "/classes.txt"
 
 """
