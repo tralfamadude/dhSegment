@@ -5,9 +5,6 @@
 import os
 from glob import glob
 import sys
-import cv2
-import numpy as np
-from imageio import imread, imsave
 from tqdm import tqdm
 import time
 import argparse
@@ -17,9 +14,6 @@ import ray
 
 from dh_segment.io import PAGE
 from dh_segment.inference import LoadedModel
-from dh_segment.post_processing import boxes_detection, binarization
-
-# what to remove before running: ../ufilm_dataset2/page_xml ../ufilm_dataset2/processed_images 
 
 PAGE_XML_DIR = 'page_xml'  # a subdir of output_dir
 model_dir = '../ufilm_dataset3/output/export'
@@ -47,7 +41,7 @@ if __name__ == '__main__':
         help='path to saved model'
     )
     parser.add_argument(
-        '--input_files', '-i',
+        '--input_dir', '-i',
         type=str,
         default='../ufilm_testset',
         help='path to dir of jpg files to process'
@@ -91,13 +85,13 @@ if __name__ == '__main__':
     if len(unparsed) > 0:
         print(f"  Unknown args ignored: {unparsed}")
     model_dir = FLAGS.model_path  # dhSegment model ("saved model" format)
-    input_files = FLAGS.input_files  # dir of jpg or png files to process
+    input_dir = FLAGS.input_dir  # dir of jpgs to process
     # glob for input_files
-    input_files1 = glob(input_files + "/*.jpg")
-    input_files2 = glob(input_files + "/*.png")
+    input_files1 = glob(input_dir + "/*.jpg")
+    input_files2 = glob(input_dir + "/*.png")
     input_file_list = input_files1 + input_files2
     input_file_list.sort()
-    output_dir = FLAGS.output_dir  # not used in production?
+    output_dir = FLAGS.output_dir
     ground_file = FLAGS.ground_file  # required for post model training
     post_model_path = FLAGS.post_model_path  # required
     enable_debug = FLAGS.debug
@@ -106,6 +100,8 @@ if __name__ == '__main__':
     if not os.path.exists(model_dir):
         print(f"model dir does not exist: {model_dir}")
         sys.exit(2)
+    # next is used if non-production (post model training data gen)
+    post_model_training_data_path = os.path.dirname(post_model_path) + "postmodel_training.data"
 
     os.makedirs(output_dir, exist_ok=True)
     # PAGE XML format output
@@ -120,17 +116,17 @@ if __name__ == '__main__':
     ray.init(dashboard_host="0.0.0.0", num_cpus=5, num_gpus=1)
     work_queue = wq.WorkQueue()
     post_process1 = pp.PostProcess.options(name="PostProcess1").remote(work_queue, output_dir, ground_file, post_model_path,
-                                                                    "postmodel_training.data", enable_debug,
+                                                                    post_model_training_data_path, enable_debug,
                                                                        production_mode, Nclasses, hocr_file)
     if production_mode:
         post_process2 = pp.PostProcess.options(name="PostProcess2").remote(work_queue, output_dir, ground_file, post_model_path,
-                                                                        "postmodel_training.data", enable_debug,
+                                                                        post_model_training_data_path, enable_debug,
                                                                            production_mode, Nclasses, hocr_file)
         post_process3 = pp.PostProcess.options(name="PostProcess3").remote(work_queue, output_dir, ground_file, post_model_path,
-                                                                        "postmodel_training.data", enable_debug,
+                                                                        post_model_training_data_path, enable_debug,
                                                                            production_mode, Nclasses, hocr_file)
         post_process4 = pp.PostProcess.options(name="PostProcess4").remote(work_queue, output_dir, ground_file, post_model_path,
-                                                                        "postmodel_training.data", enable_debug,
+                                                                        post_model_training_data_path, enable_debug,
                                                                            production_mode, Nclasses, hocr_file)
     post_process1.run.remote()
     if production_mode:
@@ -153,7 +149,7 @@ if __name__ == '__main__':
         # Load the model
         tf_model = LoadedModel(model_dir, predict_mode='filename')
         print("")
-        print(f"          PROCESSING {len(input_file_list)} files from {input_files}")
+        print(f"          PROCESSING {len(input_file_list)} files from {input_file_list}")
         if production_mode:
             print("")
             print(f"                   P R O D U C T I O N")
