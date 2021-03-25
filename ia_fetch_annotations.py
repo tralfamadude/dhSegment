@@ -157,7 +157,8 @@ def generate_classes_file(dest: str):
 
 def label_val_to_color(labelv):
     """
-    Map a label number to a color.
+    Map a label ID to a color.
+    Label IDs start at 1 since 0 is reserved to indicate background.
     :param labelv: label value, 0-Nclasses inclusive where 0 is background.
     :return: [r,g,b]
     """
@@ -181,6 +182,12 @@ def process_annotations(task_name: str, image_list: list, annotation_list: list)
         not showing here entries that are unused.
     :return: None
     """
+    # keep some stats to report
+    image_count = len(image_list)
+    annotation_count = len(annotation_list)
+    image_annotated_count = 0 # number of images with annotations
+    label_counts = np.zeros((len_label_list))  # index this with label_id-1
+
     dest_dir_images = dest_dir + "/" + task_name + "/" + "images"
     # check if already processed
     if os.path.exists(dest_dir_images):
@@ -193,6 +200,11 @@ def process_annotations(task_name: str, image_list: list, annotation_list: list)
     dest_dir_labels = dest_dir + "/" + task_name + "/" + "labels"
     apath = pathlib.Path(dest_dir_labels)
     apath.mkdir(parents=True, exist_ok=True)
+
+    ground_file = open(f"{dest_dir + '/' + task_name}/ground.csv", "w")
+    ground_file.write("file_basename,page_type\n")
+
+    generate_classes_file(dest_dir + "/" + task_name)
 
     # create a dict image_id to [ ImageAnnotation(file_name, id, width, height) ]
     #  to which we will later add annotation
@@ -209,24 +221,44 @@ def process_annotations(task_name: str, image_list: list, annotation_list: list)
         bbox = annot_dict["bbox"]
         image_annotation = image_id2details[image_id]
         image_annotation.add_annotation(category_id, bbox)
+
     #
     # process each annotated image.
     for image_annotation in image_id2details.values():
         w = image_annotation.width
         h = image_annotation.height
-        src_filename = image_annotation.image_name
+        # need basname here because the way files are picked in cvat determines whether a directory is included here
+        #  We already know what directory it came from from discipline of using task ID as issue ID as dir name
+        #  from a known base directory.
+        src_filename = os.path.basename(image_annotation.image_name)
+        src_basename = ""
         if src_filename.endswith(".jpg"):
             # mask must be png
             dest_filename = src_filename.replace(".jpg", ".png")
-        else:
+            src_basename = src_filename.replace(".jpg", "")
+        elif src_filename.endswith(".png"):
             dest_filename = src_filename
+            src_basename = src_filename.replace(".png", "")
+        else:
+            print(f"Unknown Image File extension: {src_filename} ; skipping")
+            continue
         image_annotation_list = image_annotation.annotations
         # make the mask, color the annotation rectangles
         mask_img = np.zeros((w, h, 3), np.uint8)
-        print(f"  create mask h={h}  w={w}  for {src_filename} id={image_annotation.image_id}")  # DEBUG
+        print(f"  create mask h={h}  w={w}  for {src_filename} image_id={image_annotation.image_id}")  # DEBUG
+        at_least_one_annotation = False
+        page_id = 0  # for post-model training
         for one_image_annotation in image_annotation_list:
             #   [category_id, [x, y, w, h]]
+            at_least_one_annotation = True
             label_id = one_image_annotation[0]
+            if label_id == 1 or label_id == 2:
+                page_id = 1
+            elif label_id == 3:
+                page_id = 2
+            elif label_id == 4:
+                page_id = 3
+            label_counts[label_id-1] = label_counts[label_id-1] + 1
             bbox = one_image_annotation[1]
             print(f" bbox from coco {bbox}")  # DEBUG
             x_bbox = round(bbox[0])
@@ -240,26 +272,34 @@ def process_annotations(task_name: str, image_list: list, annotation_list: list)
                     mask_img[x, y, 0] = c[0]
                     mask_img[x, y, 1] = c[1]
                     mask_img[x, y, 2] = c[2]
+        if at_least_one_annotation:
+            image_annotated_count += 1
+        ground_file.write(f"{src_basename},{page_id}\n")
         #     write the color mask file
         #  but first re-orient for imsave()
-        msg_ing_out = np.fliplr(np.rot90(mask_img, 3))
-        imsave(dest_dir_labels + "/" + dest_filename, msg_ing_out)
+        msk_img_out = np.fliplr(np.rot90(mask_img, 3))
+        imsave(dest_dir_labels + "/" + dest_filename, msk_img_out)
         # mv image to dest/images to mark it as done
         shutil.move(image_dir + "/" + task_name + "/" + src_filename, dest_dir_images + "/" + src_filename)
-    #      process unannotated images
-    # Images that have no annotations need a blank-black mask. We handle this by moving images with annotations
-    #   and any images that remain in the task directory need this treatment.
-    #unprocessed_image_filename = os.listdir(image_dir)
-    #for image_file in unprocessed_image_filename:
-    #    if not (image_file.endswith(".png") or image_file.endswith(".jpg")):
-    #        continue
-    #    # make a blank-black image mask in label dir
-    #    create_blank_mask(image_dir + "/" + image_file, dest_dir_labels + "/" + image_file)
-    #    # mv to mark as done
-    #    shutil.move(image_dir + "/" + task_name + "/" + image_file, dest_dir_images + "/" + image_file)
-
-
-
+    # finish ground.csv for post-model training
+    ground_file.flush()
+    ground_file.close()
+    # save stats
+    with open(dest_dir + "/" + task_name + "/stats.csv", "w") as f:
+        labels = ""
+        for label in annotation_type_list:
+            labels += "," + label
+        f.write("issue_id,image_count,image_annotated_count,annotation_count" + labels + "\n")
+        label_count_str = ""
+        for j in range(0, len(label_counts)):
+            label_count_str += f",{int(label_counts[j])}"
+        f.write(f"{task_name},{image_count},{image_annotated_count},{annotation_count}{label_count_str}\n")
+    with open(dest_dir + "/" + task_name + "/stats.txt", "w") as f:
+        f.write(f"task_name={task_name}\nimage_count={image_count}\nimage_annotated_count={image_annotated_count}\n")
+        f.write(f"annotation_count={annotation_count}\n")
+        f.write("\n")
+        for j in range(0, len(label_counts)):
+            f.write(f"{annotation_type_list[j]}={int(label_counts[j])}\n")
 
 # CVAT api
 r = requests.get('http://localhost:8080/api/v1/projects', auth=(user, pw))
