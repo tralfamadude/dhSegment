@@ -51,6 +51,7 @@ class PostProcess:  # actor, CONSUMER of queue
         self.cleaner = util.TextUtil()
         if production_mode:
             # production means using the post model, so we load it here
+            # (post_model_training_data_path is not used since it is already inherent in the post model joblib)
             self.feat = ia_features.Features(None, "dummy.data")  # no post model training
             self.post_model = pm.PostModel(post_model_path)
             if len(hocr_file) == 0:
@@ -285,7 +286,7 @@ class PostProcess:  # actor, CONSUMER of queue
             prediction_summary_txt = ""
             if self.production_mode:
                 #
-                #    apply post-model to determine page type,
+                #    apply post-model to determine page type
                 #
                 v = np.zeros((1, self.feat.vec_length()))
                 v[0] = self.feat.get_post_model_vec()
@@ -294,7 +295,7 @@ class PostProcess:  # actor, CONSUMER of queue
                 page_prediction_msg = f"PagePrediction: {basename} "
 
                 #
-                #    take actions on page type
+                #    take actions
                 #
                 if page_type == 0:                           # other page, skip
                     page_prediction_msg += f"type=0"
