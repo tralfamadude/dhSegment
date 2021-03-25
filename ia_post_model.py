@@ -72,7 +72,7 @@ if __name__ == "__main__":
 
     # do cross-validation to get an idea of how sensitive inference is to shuffling and picking
     model_t = model.get_model()
-    for i, score in enumerate(cross_validate(model_t, X, y, cv=5)["test_score"]):
+    for i, score in enumerate(cross_validate(DecisionTreeClassifier(), X, y, cv=5)["test_score"]):
         print(f"Accuracy for the fold no. {i} on the test set: {score}")
 
     # final training with all data
